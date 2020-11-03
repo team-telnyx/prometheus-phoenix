@@ -45,7 +45,7 @@ defmodule Prometheus.PhoenixInstrumenter do
   Predefined controller call labels:
    - action - action name (*default*);
    - controller - controller module name (*default*);
-   - status - reponse status (*default*).
+   - status - reponse status.
 
   Predefined controller render labels (Phoenix <1.5 only):
    - format - name of the format of the template (*default*);
@@ -136,7 +136,7 @@ defmodule Prometheus.PhoenixInstrumenter do
   alias Prometheus.Contrib.HTTP
 
   use Prometheus.Config,
-    controller_call_labels: [:action, :controller, :status],
+    controller_call_labels: [:action, :controller],
     controller_render_labels: [:format, :template, :view],
     controller_error_rendered_labels: [:status],
     channel_join_labels: [:channel, :topic, :transport],
