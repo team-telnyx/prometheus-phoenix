@@ -44,12 +44,18 @@ defmodule Prometheus.PhoenixInstrumenter do
 
   Predefined controller call labels:
    - action - action name (*default*);
-   - controller - controller module name (*default*).
+   - controller - controller module name (*default*);
+   - status - reponse status (*default*).
 
-  Predefined controller render labels:
+  Predefined controller render labels (Phoenix <1.5 only):
    - format - name of the format of the template (*default*);
    - template - name of the template (*default*);
    - view - name of the view (*default*).
+   
+  Predefined error view render labels (Phoenix >=1.5 only):
+   - status - response status (*default*);
+   - function - name of the function where the error happened;
+   - module - name of the module where the error happened.
 
   Predefined channel join/receive labels:
    - channel - current channel module (*default*);
@@ -69,7 +75,7 @@ defmodule Prometheus.PhoenixInstrumenter do
    - port - request port;
    - scheme - request scheme.
 
-  Predefined compile metadata labels:
+  Predefined compile metadata labels (Phoenix <1.5 only):
    - application - name of OTP application;
    - file - name of file where instrumented function resides;
    - function - name of the instrumented function;
@@ -130,8 +136,9 @@ defmodule Prometheus.PhoenixInstrumenter do
   alias Prometheus.Contrib.HTTP
 
   use Prometheus.Config,
-    controller_call_labels: [:action, :controller],
+    controller_call_labels: [:action, :controller, :status],
     controller_render_labels: [:format, :template, :view],
+    controller_error_rendered_labels: [:status],
     channel_join_labels: [:channel, :topic, :transport],
     channel_receive_labels: [:channel, :topic, :transport, :event],
     duration_buckets: HTTP.microseconds_duration_buckets(),
@@ -152,6 +159,10 @@ defmodule Prometheus.PhoenixInstrumenter do
     ncontroller_render_labels = normalize_labels(controller_render_labels)
     render_duration_buckets = Config.duration_buckets(module_name)
 
+    controller_error_rendered_labels = Config.controller_error_rendered_labels(module_name)
+    ncontroller_error_rendered_labels = normalize_labels(controller_error_rendered_labels)
+    error_rendered_duration_buckets = Config.duration_buckets(module_name)
+
     channel_join_labels = Config.channel_join_labels(module_name)
     nchannel_join_labels = normalize_labels(channel_join_labels)
     channel_join_duration_buckets = Config.duration_buckets(module_name)
@@ -165,6 +176,7 @@ defmodule Prometheus.PhoenixInstrumenter do
 
     quote do
       import Phoenix.Controller
+      require Logger
       use Prometheus.Metric
 
       def setup do
@@ -173,14 +185,27 @@ defmodule Prometheus.PhoenixInstrumenter do
           help: unquote("Whole controller pipeline execution time in #{duration_unit}."),
           labels: unquote(ncontroller_call_labels),
           buckets: unquote(duration_buckets),
+          duration_unit: unquote(duration_unit),
           registry: unquote(registry)
         )
 
+        # only observed under Phoenix <1.5
         Histogram.declare(
           name: unquote(:"phoenix_controller_render_duration_#{duration_unit}"),
           help: unquote("View rendering time in #{duration_unit}."),
           labels: unquote(ncontroller_render_labels),
           buckets: unquote(render_duration_buckets),
+          duration_unit: unquote(duration_unit),
+          registry: unquote(registry)
+        )
+
+        # only observed under Phoenix >=1.5
+        Histogram.declare(
+          name: unquote(:"phoenix_controller_error_rendered_duration_#{duration_unit}"),
+          help: unquote("View error rendering time in #{duration_unit}."),
+          labels: unquote(ncontroller_error_rendered_labels),
+          buckets: unquote(error_rendered_duration_buckets),
+          duration_unit: unquote(duration_unit),
           registry: unquote(registry)
         )
 
@@ -189,6 +214,7 @@ defmodule Prometheus.PhoenixInstrumenter do
           help: unquote("Phoenix channel join handler time in #{duration_unit}"),
           labels: unquote(nchannel_join_labels),
           buckets: unquote(channel_join_duration_buckets),
+          duration_unit: unquote(duration_unit),
           registry: unquote(registry)
         )
 
@@ -197,7 +223,101 @@ defmodule Prometheus.PhoenixInstrumenter do
           help: unquote("Phoenix channel receive handler time in #{duration_unit}"),
           labels: unquote(nchannel_receive_labels),
           buckets: unquote(channel_receive_duration_buckets),
+          duration_unit: unquote(duration_unit),
           registry: unquote(registry)
+        )
+
+        # for Phoenix >=1.5, where instrumentation is done using telemetry
+        telemetry_setup()
+      end
+
+      defp telemetry_setup() do
+        events = [
+          [:phoenix, :endpoint, :stop],
+          [:phoenix, :error_rendered],
+          [:phoenix, :channel_joined],
+          [:phoenix, :channel_handled_in]
+        ]
+
+        Logger.info("Attaching the phoenix telemetry events: #{inspect(events)}")
+
+        :telemetry.attach_many(
+          "telemetry_web__event_handler",
+          events,
+          &handle_event/4,
+          nil
+        )
+      end
+
+      def handle_event(
+            [:phoenix, :endpoint, :stop],
+            %{duration: duration},
+            %{conn: conn} = metadata,
+            _config
+          ) do
+        labels = unquote(construct_labels(controller_call_labels, :conn))
+
+        Histogram.observe(
+          [
+            registry: unquote(registry),
+            name: unquote(:"phoenix_controller_call_duration_#{duration_unit}"),
+            labels: labels
+          ],
+          duration
+        )
+      end
+
+      def handle_event(
+            [:phoenix, :error_rendered],
+            %{duration: duration},
+            %{conn: conn, status: status, stacktrace: stacktrace} = metadata,
+            _config
+          ) do
+        labels = unquote(construct_labels(controller_error_rendered_labels, :conn_error_rendered))
+
+        Histogram.observe(
+          [
+            registry: unquote(registry),
+            name: unquote(:"phoenix_controller_error_rendered_duration_#{duration_unit}"),
+            labels: labels
+          ],
+          duration
+        )
+      end
+
+      def handle_event(
+            [:phoenix, :channel_joined],
+            %{duration: duration},
+            %{socket: socket} = metadata,
+            _config
+          ) do
+        labels = unquote(construct_labels(channel_join_labels, :socket))
+
+        Histogram.observe(
+          [
+            registry: unquote(registry),
+            name: unquote(:"phoenix_channel_join_duration_#{duration_unit}"),
+            labels: labels
+          ],
+          duration
+        )
+      end
+
+      def handle_event(
+            [:phoenix, :channel_handled_in],
+            %{duration: duration},
+            %{socket: socket, event: event} = metadata,
+            _config
+          ) do
+        labels = unquote(construct_labels(channel_receive_labels, :socket))
+
+        Histogram.observe(
+          [
+            registry: unquote(registry),
+            name: unquote(:"phoenix_channel_receive_duration_#{duration_unit}"),
+            labels: labels
+          ],
+          duration
         )
       end
 
@@ -293,15 +413,29 @@ defmodule Prometheus.PhoenixInstrumenter do
   end
 
   ## controller labels
-  defp label_value(:action, :conn) do
+  defp label_value(:action, type) when type in [:conn, :conn_error_rendered] do
     quote do
       action_name(conn)
     end
   end
 
-  defp label_value(:controller, :conn) do
+  defp label_value(:controller, type) when type in [:conn, :conn_error_rendered] do
     quote do
       inspect(controller_module(conn))
+    end
+  end
+
+  defp label_value(:status, :conn) do
+    quote do
+      inspect(conn.status)
+    end
+  end
+
+  # for some reasone error_rendered rolls its own status which we prefere in these cases
+  # otherwise :conn_error_rendered is equivalent to :conn
+  defp label_value(:status, :conn_error_rendered) do
+    quote do
+      inspect(status)
     end
   end
 
@@ -325,25 +459,25 @@ defmodule Prometheus.PhoenixInstrumenter do
   end
 
   ## request labels
-  defp label_value(:host, :conn) do
+  defp label_value(:host, type) when type in [:conn, :conn_error_rendered] do
     quote do
       conn.host
     end
   end
 
-  defp label_value(:method, :conn) do
+  defp label_value(:method, type) when type in [:conn, :conn_error_rendered] do
     quote do
       conn.method
     end
   end
 
-  defp label_value(:port, :conn) do
+  defp label_value(:port, type) when type in [:conn, :conn_error_rendered] do
     quote do
       conn.port
     end
   end
 
-  defp label_value(:scheme, :conn) do
+  defp label_value(:scheme, type) when type in [:conn, :conn_error_rendered] do
     quote do
       conn.scheme
     end
@@ -412,6 +546,13 @@ defmodule Prometheus.PhoenixInstrumenter do
     end
   end
 
+  defp label_value(:function, :conn_error_rendered) do
+    quote do
+      [{_module, function, _, _} | _] = stacktrace
+      inspect(function)
+    end
+  end
+
   defp label_value(:function, _) do
     quote do
       inspect(compile.function)
@@ -424,13 +565,20 @@ defmodule Prometheus.PhoenixInstrumenter do
     end
   end
 
+  defp label_value(:module, :conn_error_rendered) do
+    quote do
+      [{module, _function, _, _} | _] = stacktrace
+      inspect(module)
+    end
+  end
+
   defp label_value(:module, _) do
     quote do
       inspect(compile.module)
     end
   end
 
-  defp label_value({label, {module, fun}}, :conn) do
+  defp label_value({label, {module, fun}}, type) when type in [:conn, :conn_error_rendered] do
     quote do
       unquote(module).unquote(fun)(unquote(label), conn)
     end
@@ -442,7 +590,7 @@ defmodule Prometheus.PhoenixInstrumenter do
     end
   end
 
-  defp label_value({label, module}, :conn) do
+  defp label_value({label, module}, type) when type in [:conn, :conn_error_rendered] do
     quote do
       unquote(module).label_value(unquote(label), conn)
     end
@@ -454,7 +602,7 @@ defmodule Prometheus.PhoenixInstrumenter do
     end
   end
 
-  defp label_value(label, :conn) do
+  defp label_value(label, type) when type in [:conn, :conn_error_rendered] do
     quote do
       label_value(unquote(label), conn)
     end
