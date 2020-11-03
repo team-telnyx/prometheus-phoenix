@@ -358,44 +358,6 @@ defmodule Prometheus.PhoenixInstrumenter do
           time_diff
         )
       end
-
-      def phoenix_channel_join(:start, compile, data) do
-        Map.put(data, :compile, compile)
-      end
-
-      def phoenix_channel_join(:stop, time_diff, %{socket: socket, compile: compile} = data) do
-        labels = unquote(construct_labels(channel_join_labels, :socket))
-
-        Histogram.observe(
-          [
-            registry: unquote(registry),
-            name: unquote(:"phoenix_channel_join_duration_#{duration_unit}"),
-            labels: labels
-          ],
-          time_diff
-        )
-      end
-
-      def phoenix_channel_receive(:start, compile, data) do
-        Map.put(data, :compile, compile)
-      end
-
-      def phoenix_channel_receive(
-            :stop,
-            time_diff,
-            %{socket: socket, event: event, compile: compile} = data
-          ) do
-        labels = unquote(construct_labels(channel_receive_labels, :socket))
-
-        Histogram.observe(
-          [
-            registry: unquote(registry),
-            name: unquote(:"phoenix_channel_receive_duration_#{duration_unit}"),
-            labels: labels
-          ],
-          time_diff
-        )
-      end
     end
   end
 

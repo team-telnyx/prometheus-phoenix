@@ -50,8 +50,13 @@ defmodule PrometheusPhoenix.Mixfile do
   defp deps do
     [
       {:prometheus_ex, "~> 1.3 or ~> 2.0 or ~> 3.0"},
-      # {:phoenix, "~> 1.4", only: [:test]},
-      {:phoenix, "~> 1.5.1", only: [:test]},
+      # Old version of phoenix. If testing with it is desired, this can be uncommented.
+      # Remember to remove the line
+      # `plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])` in the test Endpoint,
+      # otherwise the endpoint metrics will be doubled.
+      # Also you can unskip the test `Default config view - render duration`
+      {:phoenix, "~> 1.4.0", only: [:test]},
+      # {:phoenix, "~> 1.5.1", only: [:test]},
       {:telemetry_metrics, "~> 0.4", only: [:test]},
       {:telemetry_poller, "~> 0.4", only: [:test]},
       {:plug_cowboy, "~> 2.0", only: [:test]},
