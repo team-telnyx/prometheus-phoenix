@@ -73,6 +73,27 @@ defmodule PrometheusPhoenixTest do
     assert 1 = Enum.reduce(buckets, fn x, acc -> x + acc end)
   end
 
+  test "Error view render" do
+    # for some reason, the request still raises on a test conn, so we rescue, but the 404
+    # is correctly instrumented by then, which is what matters here
+    conn =
+      try do
+        conn = get(build_conn(), "/qwe_vie")
+      rescue
+        e in Phoenix.Router.NoRouteError ->
+          e.conn
+      end
+
+    assert {buckets, sum} =
+             Histogram.value(
+               name: :phoenix_controller_error_rendered_duration_microseconds,
+               labels: ["404"]
+             )
+
+    assert sum > 500_000 and sum < 700_000
+    assert 1 = Enum.reduce(buckets, fn x, acc -> x + acc end)
+  end
+
   test "Channel join/receive" do
     socket = socket(PrometheusPhoenixTest.TestSocket)
 

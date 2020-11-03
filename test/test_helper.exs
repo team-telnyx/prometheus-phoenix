@@ -57,6 +57,14 @@ defmodule PrometheusPhoenixTest.View do
   use Phoenix.View, root: "test/templates"
 end
 
+defmodule PrometheusPhoenixTest.ErrorView do
+  use Phoenix.View, root: "test/templates"
+
+  def render("404.html", _assigns) do
+    Process.sleep(500)
+  end
+end
+
 defmodule PrometheusPhoenixTest.Controller do
   use Phoenix.Controller
 
