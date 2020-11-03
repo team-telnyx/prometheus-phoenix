@@ -242,7 +242,7 @@ defmodule Prometheus.PhoenixInstrumenter do
         Logger.info("Attaching the phoenix telemetry events: #{inspect(events)}")
 
         :telemetry.attach_many(
-          "telemetry_web__event_handler",
+          "telemetry_web_event_handler" <> Atom.to_string(unquote(module_name)),
           events,
           &handle_event/4,
           nil
