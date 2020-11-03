@@ -50,7 +50,7 @@ defmodule PrometheusPhoenixTest do
     assert 1 = Enum.reduce(buckets, fn x, acc -> x + acc end)
   end
 
-  test "Default config view" do
+  test "Default config view - call duration" do
     conn = get(build_conn(), "/qwe_view")
     assert html_response(conn, 200) =~ "Hello John Doe"
 
@@ -62,6 +62,13 @@ defmodule PrometheusPhoenixTest do
 
     assert sum > 1_000_000 and sum < 1_200_000
     assert 1 = Enum.reduce(buckets, fn x, acc -> x + acc end)
+  end
+
+  # TODO: this doesn't exist in Phoenix 1.5, but keeping for reference for time being
+  @tag :skip
+  test "Default config view - render duration" do
+    conn = get(build_conn(), "/qwe_view")
+    assert html_response(conn, 200) =~ "Hello John Doe"
 
     assert {buckets, sum} =
              Histogram.value(
