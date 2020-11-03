@@ -415,13 +415,21 @@ defmodule Prometheus.PhoenixInstrumenter do
   ## controller labels
   defp label_value(:action, type) when type in [:conn, :conn_error_rendered] do
     quote do
-      action_name(conn)
+      try do
+        action_name(conn)
+      rescue
+        _ -> nil
+      end
     end
   end
 
   defp label_value(:controller, type) when type in [:conn, :conn_error_rendered] do
     quote do
-      inspect(controller_module(conn))
+      try do
+        inspect(controller_module(conn))
+      rescue
+        _ -> nil
+      end
     end
   end
 
