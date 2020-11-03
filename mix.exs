@@ -55,8 +55,8 @@ defmodule PrometheusPhoenix.Mixfile do
       # `plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])` in the test Endpoint,
       # otherwise the endpoint metrics will be doubled.
       # Also you can unskip the test `Default config view - render duration`
-      {:phoenix, "~> 1.4.0", only: [:test]},
-      # {:phoenix, "~> 1.5.1", only: [:test]},
+      # {:phoenix, "~> 1.4.0", only: [:test]},
+      {:phoenix, "~> 1.5.1", only: [:test]},
       {:telemetry_metrics, "~> 0.4", only: [:test]},
       {:telemetry_poller, "~> 0.4", only: [:test]},
       {:plug_cowboy, "~> 2.0", only: [:test]},

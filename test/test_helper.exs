@@ -49,7 +49,7 @@ defmodule PrometheusPhoenixTest.Endpoint do
 
   socket("/socket", PrometheusPhoenixTest.TestSocket, websocket: [timeout: 45_000])
 
-  # plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
+  plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
   plug(PrometheusPhoenixTest.Router)
 end
 
