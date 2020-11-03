@@ -83,13 +83,12 @@ defmodule PrometheusPhoenixTest do
   test "Error view render" do
     # for some reason, the request still raises on a test conn, so we rescue, but the 404
     # is correctly instrumented by then, which is what matters here
-    conn =
-      try do
-        conn = get(build_conn(), "/qwe_vie")
-      rescue
-        e in Phoenix.Router.NoRouteError ->
-          e.conn
-      end
+    try do
+      get(build_conn(), "/qwe_vie")
+    rescue
+      _ in Phoenix.Router.NoRouteError ->
+        :ok
+    end
 
     assert {buckets, sum} =
              Histogram.value(
